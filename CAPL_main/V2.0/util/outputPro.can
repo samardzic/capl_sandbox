@@ -1,0 +1,168 @@
+/*@!Encoding:936*/
+includes
+{
+  
+}
+
+variables
+{
+  msTimer outputTimer;
+  struct OutPutMsg{
+    word msgId;
+    word cycle;
+    int dlc;
+    int BRS;
+    int FDF;
+    byte msgData[64];
+    word timeCount;
+  };
+  struct OutPutMsg OutPutMsgArr[long];
+}
+on timer outputTimer{
+  OutputProCroe();
+  setTimer(outputTimer,1);
+}
+void enableOutputPro(){
+  setTimer(outputTimer,1);
+}
+void _createMessage(message * a,struct OutPutMsg b){
+  int i;
+  a.id = b.msgId;
+  a.dlc = b.dlc;
+  a.BRS = b.BRS;
+  a.FDF = b.FDF;
+  for(i=0;i<_getDataLengthByDLC(b.dlc);i++){
+    a.byte(i)=b.msgData[i];
+  }
+}
+int _getDataLengthByDLC(int dlc){
+  switch(dlc){
+    case 9:
+      return 12;
+      break;
+    case 10:
+      return 16;
+      break;
+    case 11:
+      return 20;
+      break;
+    case 12:
+      return 24;
+      break;
+    case 13:
+      return 32;
+      break;
+    case 14:
+      return 48;
+      break;
+    case 15:
+      return 64;
+      break;
+    default:
+      return 8;
+  }
+}
+long addCANMsg(word id,word cycle){
+  struct OutPutMsg d = {dlc=8,brs=0,fdf=0};
+  d.msgId = id;
+  d.cycle = cycle;
+  return addMsg(d);
+}
+long addCANFDMsg(word id,word cycle){
+  struct OutPutMsg d = {dlc=8,brs=1,fdf=1};
+  d.msgId = id;
+  d.cycle = cycle;
+  return addMsg(d);
+}
+long addMsg(struct OutPutMsg a){
+  long handle;
+  handle=OutPutMsgArr.size()+1;
+  if(handle>50)
+    return 0;
+  setOutPutProMsgId(handle,a.msgId);
+  setOutPutProCycle(handle,a.cycle);
+  setOutPutProDlc(handle,a.dlc);
+  setOutPutProBRS(handle,a.BRS);
+  setOutPutProFDF(handle,a.FDF);
+  setOutPutProMsgData(handle,a.msgData,a.dlc);
+  return handle;
+}
+void delMsg(long handle){
+  OutPutMsgArr.remove(handle);
+}
+void clearMsg(long handle){
+  OutPutMsgArr.clear();
+}
+long getOutputProArrSize(){
+  return OutPutMsgArr.size();
+}
+void OutputProCroe(){
+  message * msg;
+  for(long handle: OutPutMsgArr){
+    setOutPutProTimeCount(handle,getOutPutProTimeCount(handle)+1);
+    if(getOutPutProTimeCount(handle)>=getOutPutProCycle(handle)){
+      _createMessage(msg,OutPutMsgArr[handle]);
+      output(msg);
+      setOutPutProTimeCount(handle,0);
+    }
+  }
+
+}
+
+// getting and setting the message data
+void setOutPutProMsgId(long handle,word msgId){
+  OutPutMsgArr[handle].msgId=msgId;
+}
+word getOutPutProMsgId(long handle){
+  return OutPutMsgArr[handle].msgId;
+}
+void setOutPutProCycle(long handle,word cycle){
+  if(OutPutMsgArr.containsKey(handle)){
+    OutPutMsgArr[handle].cycle=cycle;
+  }else{
+    write("No Found This Msg");
+  }
+}
+word getOutPutProCycle(long handle){
+  return OutPutMsgArr[handle].cycle;
+}
+void setOutPutProDlc(long handle,int dlc){
+  OutPutMsgArr[handle].dlc=dlc;
+}
+int getOutPutProDlc(long handle){
+  return OutPutMsgArr[handle].dlc;
+}
+void setOutPutProBRS(long handle,int BRS){
+  OutPutMsgArr[handle].BRS=BRS;
+}
+int getOutPutProBRS(long handle){
+  return OutPutMsgArr[handle].BRS;
+}
+void setOutPutProFDF(long handle,int FDF){
+  OutPutMsgArr[handle].FDF=FDF;
+}
+int getOutPutProFDF(long handle){
+  return OutPutMsgArr[handle].FDF;
+}
+void setOutPutProMsgData(long handle,byte msgData[],int dlc){
+  int i;
+  for(i=0;i<dlc;i++){
+    OutPutMsgArr[handle].msgData[i]=msgData[i];
+  }
+}
+void setOutPutProMsgData(long handle,int index,byte value){
+  OutPutMsgArr[handle].msgData[index]=value;
+}
+long getOutPutProMsgData(long handle,byte msgData[]){
+  int i;
+  for(i=0;i<getOutPutProDlc(handle);i++){
+    msgData[i]=OutPutMsgArr[handle].msgData[i];
+  }
+  return getOutPutProDlc(handle);
+}
+void setOutPutProTimeCount(long handle,word timeCount){
+  OutPutMsgArr[handle].timeCount=timeCount;
+}
+word getOutPutProTimeCount(long handle){
+  return OutPutMsgArr[handle].timeCount;
+}

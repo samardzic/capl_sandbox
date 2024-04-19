@@ -1,0 +1,77 @@
+/*@!Encoding:936*/
+/**
+  * @Author: fanshuhua
+  * @version 1.0
+  */
+includes
+{
+  
+}
+
+variables
+{
+  
+}
+
+void print(byte a[],dword len){
+  int i;
+  writeEx(1,0,"\n");
+  for(i=0;i<len;i++){
+    if(a[i] <= 0xF){
+      writeEx(1,0,"0%x ",a[i]);
+    }else{
+      writeEx(1,0,"%x ",a[i]);
+    }
+  }
+}
+void print(byte a[],dword off,dword len){
+  dword i;
+  writeEx(1,0,"1 22\n");
+  for(i=off;i<len+off;i++){
+    if(a[i] <= 0xF){
+      writeEx(1,0,"0%x ",a[i]);
+    }else{
+      writeEx(1,0,"%x ",a[i]);
+    }
+  }
+}
+void print(byte a[]){
+  print(a,elCount(a));
+}
+int Min(int a, int b)
+{
+  if (a < b)
+    return a;
+  else
+    return b;
+}
+void byteArrayToCharString(byte byteArray[], char charString[]) {
+  byteArrayToCharString(byteArray,elCount(byteArray),charString);
+}
+void byteArrayToCharString(byte byteArray[], int length, char charString[]) {
+    int charIndex; 
+    int i;
+    char highNibble;
+    char lowNibble;
+    charIndex = 0; //奇奇怪怪的BUG，不重新赋0的话，第二次调用该函数时charIndex不等于0
+    for (i = 0; i < Min(length,(elCount(charString)-1)/2); i++) {
+      highNibble = byteArray[i] >> 4 & 0x0F;
+      lowNibble = byteArray[i] & 0x0F;
+      if(highNibble < 10){
+        charString[charIndex++] = highNibble + 48;
+      }else{
+        charString[charIndex++] = highNibble + 55;
+      }
+      if(lowNibble < 10){
+        charString[charIndex++] = lowNibble + 48;
+      }else{
+        charString[charIndex++] = lowNibble + 55;
+      }
+    }
+    charString[charIndex] = '\0'; 
+}
+
+
+
+
+

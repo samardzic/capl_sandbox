@@ -1,0 +1,117 @@
+/*@!Encoding:936*/
+includes{
+
+  #include "TypeConversionUtil.can"
+}
+
+variables{
+  enum RrecordType{
+    DataRrecord = 0,
+    EndRrecord = 1,
+    ExtendedSegmentAddressRecord = 2,
+    StartSegmentAddressRecord = 3,
+    ExtendedLinearAddressRecord = 4,
+    StartLinearAddressRecord = 5
+  };
+  struct hexFileRow{
+    int len;
+    word loadOffset;
+    int recordType;
+    byte data[512];
+    int chksum;
+  };
+  struct hexFileBlock{
+    dword startAdd;
+    dword dataLen;
+    byte data[1024*1024];
+  };
+  struct hexFile{
+    struct hexFileBlock block[15];
+    int hexFileBlockNum;
+  };
+}
+
+on start
+{
+// readHexFile("E:\\学习相关\\工程\\ALPS CMX和CDD\\Updata\\V0.A\\DK010_BTA_SRF_BLE\\DK010_BTA_SRF_Update_app_withUpdateBoot_20230909.hex");
+//   readHexFile("E:\\学习相关\\工程\\ALPS CMX和CDD\\Updata\\V0.A\\YF_BTA_SOFT_V000A_230909\\P0330123 AB\\P0330123 AB\\DRIVER\\P0330123 AB DRIVER.hex");
+}
+
+//void readHexFile(struct hexFile f,char path[]){
+void readHexFile(char path[]){
+  long fileHandle,i;
+  char buffer[255],lotaBufffer[255];
+  struct hexFileRow rows[long];
+  
+  fileHandle = openFileRead(path,0);
+  if(fileHandle <= 0){
+    write("读取文件失败 %d",fileHandle);
+    return;
+  }
+  for(i=0;;i++){
+    if(fileGetStringSZ(buffer,elCount(buffer),fileHandle)<=0){
+      break;
+    }
+    if(buffer[0] !=':'){
+      write("解析文件出错，文件中出现不属于hex格式的数据 ，文件路径：%s",path);
+      return;
+    }
+    substr_cpy(lotaBufffer,buffer,1,2,elCount(lotaBufffer));
+    rows[i].len = hexCharArrayToLong(lotaBufffer);
+    substr_cpy(lotaBufffer,buffer,3,4,elCount(lotaBufffer));
+    rows[i].loadOffset = hexCharArrayToLong(lotaBufffer);
+    substr_cpy(lotaBufffer,buffer,7,2,elCount(lotaBufffer));
+    rows[i].recordType = hexCharArrayToLong(lotaBufffer);
+    substr_cpy(lotaBufffer,buffer,9,rows[i].len*2,elCount(lotaBufffer));
+    charStringToByteArray(lotaBufffer,rows[i].data,rows[i].len);
+    // write("rows[i].data %d  %d %d %d %d",i,rows[i].data[0],rows[i].data[1],rows[i].data[2],rows[i].data[3]);
+    substr_cpy(lotaBufffer,buffer,9+rows[i].len*2,2,elCount(lotaBufffer));
+    rows[i].chksum = hexCharArrayToLong(lotaBufffer);
+    
+    // write("%d %d ",rows[i].len,rows[i].loadOffset);
+    // write("%x %x %x %x ",rows[i].len,rows[i].loadOffset,rows[i].recordType,rows[i].chksum);
+    // write("%x %x %x %x ",rows[i].data[0],rows[i].data[1],rows[i].data[2],rows[i].data[3]);
+  }
+  // write("文件 %d ",rows.size());
+  // write("%d %d %x",rows[i-1].len,rows[i-1].loadOffset,rows[i-1].recordType);
+  createHexFileBlock(rows);
+}
+void createHexFileBlock(struct hexFileRow rows[long]){
+  // 将hex文件按照block分组
+  int i,j;
+  struct hexFileBlock block[15];
+  int blockNum = 0;
+  for(i=0;i<rows.size();i++){
+    if(rows[i].recordType == DataRrecord){
+      for(j=0;j<rows[i].len;j++){
+        block[blockNum].data[rows[i].loadOffset+j] = rows[i].data[j];
+      }
+      block[blockNum].dataLen += rows[i].len;
+    }else if(rows[i].recordType == EndRrecord){
+      blockNum++;
+    }else if(rows[i].recordType == ExtendedLinearAddressRecord){
+      // 需要判断是否是新的block，并且与上一个block的地址是否连续，如果不连续则新建一个block
+      if(block[blockNum].startAdd == 0){
+        block[blockNum].startAdd = byteArrayToLong(rows[i].data,rows[i].len);
+        block[blockNum].startAdd = block[blockNum].startAdd << 16;
+        block[blockNum].startAdd += rows[i+1].loadOffset;
+        write("block %d %x",blockNum,block[blockNum].startAdd);
+      }else{
+        if(block[blockNum].startAdd + block[blockNum].dataLen != (byteArrayToLong(rows[i].data,rows[i].len)<<16 + rows[i+1].loadOffset)){
+          // write("block[blockNum].startAdd + block[blockNum].dataLen %x",block[blockNum].startAdd + block[blockNum].dataLen);
+          // write("byteArrayToLong(rows[i].data,rows[i].len) + rows[i+1].loadOffset %x",byteArrayToLong(rows[i].data,rows[i].len) + rows[i+1].loadOffset);
+          blockNum++;
+          block[blockNum].startAdd = byteArrayToLong(rows[i].data,rows[i].len);
+          block[blockNum].startAdd = block[blockNum].startAdd << 16;
+          block[blockNum].startAdd += rows[i+1].loadOffset;
+          write("block %d %x",blockNum,block[blockNum].startAdd);
+        }
+      }
+    }
+  }
+  write("blockNum %d",blockNum);
+  for(i=0;i<blockNum;i++){
+    write("block %d %x %x",i,block[i].startAdd,block[i].dataLen);
+  }
+  
+}

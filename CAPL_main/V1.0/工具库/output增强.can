@@ -1,0 +1,145 @@
+﻿/*@!Encoding:65001*/
+/**
+  * @Author: fanshuhua
+  * @version 1.0
+  */
+includes
+{
+  // #include "./time.can"
+}
+
+variables
+{
+  msTimer outputTimer;// 定时器
+  qword outputTimerClock = 0; // 计时器，记录当前运行第几毫秒，之所以不直接获取当前时间来，是担心有丢报文的风险,但是存在时间误差
+  enum runState {State_Off = 0, State_On = 1};
+  struct outputTimerTask{
+    dword runnerCycle; // 运行周期
+    qword startTime; // 第一帧运行的时间，发送时间计算：(scheduleClock-startTime)/runnerCycle 
+    enum runState state; // 任务运行标志位，
+    dword sentStatus; //发送状态，-1表示无限制，其他表示发送次数
+  }Task;
+  //是当前任务的指针，也是返回的任务句柄。
+  long taskTop = 0;
+  // 此处定义最多同时执行五十条任务的队列，后续可以自己更改，超过五十则从队头位置删除一个任务，并赋给新任务
+  struct outputTimerTask outputTimerTaskArray[50];
+  message * msgArray[50]; // message 没办法塞入结构体中？？？没办法只能单独存放
+}
+
+
+on start
+{
+  setTimer(outputTimer,1);
+}
+/**
+outputTimerBefore outputTimer的前置通知函数，此函数禁止被其他函数调用
+*/
+void outputTimerBefore(int handle){
+  // outputTimerTaskArray[handle];   任务本体
+  // msgArray[handle]                消息本体
+  
+}
+
+/**
+output增强，周期发送报文，若需要返回句柄则使用outputTimer
+message * msg             需要发送的报文
+dword runnerCycle         发送周期
+*/
+void output(message * msg,dword runnerCycle){
+   outputTimer(msg,runnerCycle,-1);
+}/**
+output增强，周期发送报文，若需要返回句柄则使用outputTimer
+message * msg             需要发送的报文
+dword runnerCycle         发送周期
+dword sentStatus          发送状态，-1为无限制，0是停止发送，大于0为限制发送条数
+*/
+void output(message * msg,dword runnerCycle,dword sentStatus){
+   outputTimer(msg,runnerCycle,sentStatus);
+}
+/**
+添加不限制发送数量的任务
+message * msg             需要发送的报文
+dword runnerCycle         发送周期
+return int 任务句柄
+*/
+int outputTimer(message * msg,dword runnerCycle){
+   return outputTimer(msg,runnerCycle,-1);
+}
+/**
+添加限制发送条数的任务
+message * msg             需要发送的报文
+dword runnerCycle         发送周期
+dword sentStatus          发送状态，-1为无限制，0是停止发送，大于0为限制发送条数
+return int 任务句柄
+*/
+int outputTimer(message * msg,dword runnerCycle,dword sentStatus){
+  outputTimerTaskArray[taskTop].runnerCycle = runnerCycle;
+  outputTimerTaskArray[taskTop].startTime = outputTimerClock; // 第一帧发送时间为当前时间
+  outputTimerTaskArray[taskTop].state = State_On;
+  outputTimerTaskArray[taskTop].sentStatus = sentStatus; 
+  msgArray[taskTop] = msg;
+  taskTop++;
+  taskTop = taskTop % elCount(outputTimerTaskArray);
+  //write("执行添加任务，当前taskTop为 %d ",taskTop);
+  return taskTop;
+}
+/**
+删除任务
+int handle 任务句柄
+*/
+void deleteOutputTimer(int handle){
+  int target,taskArrayLength;
+  taskArrayLength = elCount(outputTimerTaskArray);
+  for(;handle < taskArrayLength; handle++ ){
+    if(handle + 1 == taskArrayLength){
+      message * tmpMsg;
+      outputTimerTaskArray[handle].runnerCycle = 0;
+      outputTimerTaskArray[handle].sentStatus = 0;
+      outputTimerTaskArray[handle].startTime = 0;
+      outputTimerTaskArray[handle].state = State_Off;
+      msgArray[handle] = tmpMsg;
+    }else{
+      outputTimerTaskArray[handle].runnerCycle = outputTimerTaskArray[handle + 1].runnerCycle;
+      outputTimerTaskArray[handle].sentStatus = outputTimerTaskArray[handle + 1].sentStatus;
+      outputTimerTaskArray[handle].startTime = outputTimerTaskArray[handle + 1].startTime;
+      outputTimerTaskArray[handle].state = outputTimerTaskArray[handle + 1].state;
+      msgArray[handle] = msgArray[handle+1];
+    }
+    if(outputTimerTaskArray[handle].runnerCycle == 0){
+      break;
+    }
+  }
+    taskTop--;
+    //write("执行删除任务，当前taskTop为 %d ",taskTop);
+}
+// ========================================================================================================
+on timer outputTimer{
+  int i;
+  for (i = elCount(outputTimerTaskArray) - 1;i >= 0 ;i--){
+    dword k;
+    if (outputTimerTaskArray[i].runnerCycle <= 0)
+      continue; 
+    if (outputTimerTaskArray[i].state == State_Off)
+      continue;
+    // 当前时间满足发送周期
+    if ((outputTimerClock-outputTimerTaskArray[i].startTime)%outputTimerTaskArray[i].runnerCycle != 0)
+      continue;
+    // 判断发送状态
+    if (outputTimerTaskArray[i].sentStatus < -1 || outputTimerTaskArray[i].sentStatus == 0 ){
+      continue;
+    }
+    
+    // TODO 前置通知
+    outputTimerBefore(i);
+    output(msgArray[i]);
+    // TODO 后置通知
+    
+    if (outputTimerTaskArray[i].sentStatus > 0 ){
+      outputTimerTaskArray[i].sentStatus--;
+    }
+  }
+
+  
+  outputTimerClock++;
+  setTimer(outputTimer,1);
+}

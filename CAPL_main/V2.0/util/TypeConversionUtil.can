@@ -1,0 +1,116 @@
+﻿/*@!Encoding:65001*/
+
+includes{
+}
+
+variables{
+
+}
+long max(long a,long b){
+  return a>b ? a:b;
+}
+long min(long a,long b){
+    return a<b ? a:b;
+}
+void byteArrayToCharString(byte byteArray[], char charString[]) {
+  byteArrayToCharString(byteArray,elCount(byteArray),charString);
+}
+void byteArrayToCharString(byte byteArray[], long length, char charString[]) {
+    long charIndex,i;
+    char highNibble,lowNibble;
+    charIndex = 0; 
+    for (i = 0; i < min(length,(elCount(charString)-1)/2); i+=1) {
+      highNibble = byteArray[i] >> 4 & 0x0F;
+      lowNibble = byteArray[i] & 0x0F;
+      if(highNibble < 10){
+        charString[charIndex++] = highNibble + 48;
+      }else{
+        charString[charIndex++] = highNibble + 55;
+      }
+      if(lowNibble < 10){
+        charString[charIndex++] = lowNibble + 48;
+      }else{
+        charString[charIndex++] = lowNibble + 55;
+      }
+//      write("i = %d byteArray[i] =%x highNibble = %d lowNibble = %d",i,byteArray[i],highNibble,lowNibble);
+    }
+    charString[charIndex] = '\0'; 
+}
+void charStringToByteArray(char charString[], byte byteArray[], long maxLength) {
+    long charIndex,charLength,byteIndex;
+    byte resultByte;
+    char highNibble,lowNibble;
+  
+    charIndex = 0;
+    byteIndex = 0;
+    charLength = strlen(charString);
+  
+    while (charIndex < charLength && byteIndex < maxLength) {
+        highNibble = charString[charIndex++];
+        lowNibble = charString[charIndex++];
+        
+        if (highNibble >= '0' && highNibble <= '9') {
+            highNibble -= '0';
+        } else if (highNibble >= 'A' && highNibble <= 'F') {
+            highNibble -= 'A' - 10;
+        } else {
+            // TODO  处理无效字符
+        }
+        
+        if (lowNibble >= '0' && lowNibble <= '9') {
+            lowNibble -= '0';
+        } else if (lowNibble >= 'A' && lowNibble <= 'F') {
+            lowNibble -= 'A' - 10;
+        } else {
+            // TODO  处理无效字符
+        }
+        
+        resultByte = (highNibble << 4) | lowNibble;
+        byteArray[byteIndex++] = resultByte;
+    }
+}
+
+long hexCharArrayToLong(char hexCharArray[]) {
+    long result,hexValue;
+    int charIndex;
+    char hexChar;
+    result=0;
+    charIndex = 0;
+    // Skip any leading '0x' prefix if present
+    if (hexCharArray[0] == '0' && (hexCharArray[1] == 'x' || hexCharArray[1] == 'X')) {
+        charIndex = 2; // Start from the character after 'x' or 'X'
+    }
+    
+    while (hexCharArray[charIndex] != '\0') {
+        hexChar = hexCharArray[charIndex];
+        hexValue = 0;
+        
+        if (hexChar >= '0' && hexChar <= '9') {
+            hexValue = hexChar - '0';
+        } else if (hexChar >= 'A' && hexChar <= 'F') {
+            hexValue = hexChar - 'A' + 10;
+        } else if (hexChar >= 'a' && hexChar <= 'f') {
+            hexValue = hexChar - 'a' + 10;
+        } else {
+            // Handle invalid characters here if needed
+        }
+        
+        result = (result << 4) | hexValue;
+        charIndex++;
+    }
+    return result;
+}
+long byteArrayToLong(byte byteArray[], long length) {
+    long result;
+    long i;
+    char highNibble,lowNibble;
+    result = 0;
+    for (i = 0; i < length;) {
+      highNibble = byteArray[i++] & 0xFF;
+      lowNibble = byteArray[i++] & 0xFF;
+      result = (result << 8) | (highNibble << 4) | lowNibble;
+    //  write("i = %d byteArray[i] =%x highNibble = %d lowNibble = %d",i,byteArray[i],highNibble,lowNibble);
+    }
+    // write("result = %x",result);
+    return result;
+}

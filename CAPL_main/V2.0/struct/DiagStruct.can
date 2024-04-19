@@ -1,0 +1,307 @@
+﻿/*@!Encoding:65001*/
+includes
+{
+}
+
+variables
+{
+  enum DiagDir{
+    TxMsg = 0,
+    RxMsg = 1
+  };
+  enum RespType{
+    diagTimeoutButAnswered=2,
+    Answer=1,
+    
+    Sending=-1,
+    SendFail=-2,
+    NoAnswer=-3,
+    diagTimeout=-4,
+    
+    WaitAnswer=-5,
+    Pending=-6,   // 0x78
+    FlowControl=-7,
+    OverFlow=-8
+  };
+  // DiagMsg 用来存储发送和接收的数据
+  struct DiagMsg{
+    float time;
+    enum DiagDir dir;
+    int dateLen;
+    char date[61];
+  } diagMsg;
+  // Diag 存储连接的信息
+  struct Diag{
+    long handle; // 句柄
+    enum RespType respInd; 
+    
+    long PendingCount;// NRC 0x78 等待次数
+    long CFCount; // 连续帧计数
+    long FCCount; // 流控帧计数
+    dword delayTime; //延迟发送时间
+
+    word p2server;
+    word p2_server;// p2*server
+    word timeout;  // 停止等待响应时间，超过改时间判定为诊断无应答
+
+    long reqLength;// 发送的诊断服务数据
+    byte reqData[4096];
+    long respLength; // 诊断响应的实际长度
+    byte respData[4096]; 
+  };
+  struct Diag _diagMap[long];
+  struct DiagMsg _diagMsgMap[long,20];
+  long _msgMapIndex = 0;
+}
+/*
+_copyDiagMap      用来复制Diag结构体
+struct Diag d     目标结构体
+struct Diag s     源结构体
+*/
+/// 私有函数，不建议外部访问
+void _copyDiagMap(struct Diag d,struct Diag s){
+  
+  // 使用getter和setter来复制
+  _setDiagHandle(s.handle);
+  setDiagRespInd(d.handle,s.respInd);
+  setDiagDelayTime(d.handle,s.delayTime);
+  setDiagPendingCount(d.handle,s.PendingCount);
+  setDiagP2server(d.handle,s.p2server);
+  setDiagP2_server(d.handle,s.p2_server);
+  setDiagTimeout(d.handle,s.timeout);
+}
+/*
+setDiagMap       用来设置Diag结构体
+*/
+void setDiagMap(struct Diag d){
+  _copyDiagMap(_diagMap[d.handle],d);
+}
+// 移除连接
+void closeDiagConn(long handle){
+  _diagMap.remove(handle);
+}
+// 清空连接
+void clearDiagConn(){
+  _diagMap.clear();
+}
+// 判断连接是否存在
+int hasDiagConn(long handle){
+  return _diagMap.containsKey(handle);
+}
+// 返回连接数量
+int getDiagConnCount(){
+  return _diagMap.size();
+}
+// setting 和 geting
+void _setDiagHandle(long handle){
+  _diagMap[handle].handle = handle;
+}
+long getDiagHandle(long handle){
+  return _diagMap[handle].handle;
+}
+void setDiagRespInd(long handle,enum RespType value){
+  _diagMap[handle].respInd = value;
+  if(value<0){
+    setDiagRespDataLength(handle,0);
+  }
+}
+enum RespType getDiagRespInd(long handle){
+  return _diagMap[handle].respInd;
+}
+void getDiagRespIndTxt(long handle,char buffer[]){
+  char AnswerTxt[10]="Answer";
+  char diagTimeoutButAnsweredTxt[30]="diagTimeoutButAnswered";
+  char RespIndTxt_error[15]="未知状态";
+  
+  switch(1){
+    case Answer:
+      strncpy(buffer,AnswerTxt,elCount(AnswerTxt));
+      break;
+    case diagTimeoutButAnswered:
+      strncpy(buffer,diagTimeoutButAnsweredTxt,elCount(diagTimeoutButAnsweredTxt));
+      break;
+    default:
+      strncpy(buffer,RespIndTxt_error,elCount(error));
+      break;
+  }
+}
+void setDiagDelayTime(long handle,dword value){
+  _diagMap[handle].delayTime = value;
+}
+dword getDiagDelayTime(long handle){
+  return _diagMap[handle].delayTime;
+}
+void setDiagPendingCount(long handle,long value){
+  _diagMap[handle].PendingCount = value;
+}
+long getDiagPendingCount(long handle){
+  return _diagMap[handle].PendingCount;
+}
+void setDiagCFCount(long handle,long value){
+  _diagMap[handle].CFCount = value;
+}
+long getDiagCFCount(long handle){
+  return _diagMap[handle].CFCount;
+}
+void setDiagFCCount(long handle,long value){
+  _diagMap[handle].FCCount = value;
+}
+long getDiagFCCount(long handle){
+  return _diagMap[handle].FCCount;
+}
+void setDiagP2server(long handle,word value){
+  _diagMap[handle].p2server = value;
+}
+word getDiagP2server(long handle){
+  return _diagMap[handle].p2server;
+}
+void setDiagP2_server(long handle,word value){
+  _diagMap[handle].p2_server = value;
+}
+word getDiagP2_server(long handle){
+  return _diagMap[handle].p2_server;
+}
+void setDiagTimeout(long handle,word value){
+  _diagMap[handle].timeout = value;
+}
+word getDiagTimeout(long handle){
+  return _diagMap[handle].timeout;
+}
+long getDiagReqLength(long handle){
+  return _diagMap[handle].reqLength;
+}
+void setDiagReqDataLength(long handle, long length){
+  _diagMap[handle].reqLength = length;
+}
+void setDiagReqData(long handle,byte value[], long length){
+  memcpy(_diagMap[handle].reqData,value,length);
+  _diagMap[handle].reqLength = length;
+}
+void getDiagReqData(long handle,byte value[]){
+  memcpy(value,_diagMap[handle].reqData,_diagMap[handle].reqLength);
+}
+long getDiagRespLength(long handle){
+  return _diagMap[handle].respLength;
+}
+void setDiagRespDataLength(long handle,long length){
+  _diagMap[handle].respLength = length;
+}
+void setDiagRespData(long handle,byte value[], long length){
+  memcpy(_diagMap[handle].respData,value,length);
+  _diagMap[handle].respLength = length;
+}
+void getDiagRespData(long handle,byte value[]){
+  if(elcount(value)<_diagMap[handle].respLength){
+    memcpy(value,_diagMap[handle].respData,elcount(value));
+    write("接收数组大小小于实际长度,只返回部分数据");
+    return;
+  }
+  memcpy(value,_diagMap[handle].respData,_diagMap[handle].respLength);
+}
+long getDiagRespDataAndLength(long handle,byte value[]){
+  long len;
+  len = _diagMap[handle].respLength;
+  if(elcount(value)<_diagMap[handle].respLength){
+    memcpy(value,_diagMap[handle].respData,elcount(value));
+    write("接收数组大小小于实际长度,只返回部分数据");
+  }else{
+    memcpy(value,_diagMap[handle].respData,_diagMap[handle].respLength);
+  }
+  return len;
+}
+// =========================================报文消息保存========================================================
+// 保存报文消息
+void saveDiagMsg(enum DiagDir dir ,byte date[],int dateLen){
+  _diagMsgMap[_msgMapIndex].time = timeNowFloat()/100000.0;
+  _diagMsgMap[_msgMapIndex].dir = dir;
+  _diagMsgMap[_msgMapIndex].dateLen = dateLen;
+  // 将byte转换为char
+  msgByteToChar(date,dateLen,_diagMsgMap[_msgMapIndex].date);
+  _msgMapIndex++;
+}
+
+void printDiagMsg(){
+  long i,table;
+  char num[15];
+  char dir_Rx[3]="Rx";
+  char dir_Tx[3]="Tx";
+  WriteTextColor(1,120,146,98);
+  write("%-10s %-14s %-13s %-20s","时间","发送方","长度","数据");
+  
+  table = TestInfoTable("诊断报文数据");
+  TestInfoHeadingBegin(table, 0);
+  TestInfoCell(table, "时间");
+  TestInfoCell(table, "发送方");
+  TestInfoCell(table, "长度");
+  TestInfoCell(table, "数据");
+  TestInfoCell(table, "Result");
+  TestInfoHeadingEnd(table);
+
+  for(i=0;i<_msgMapIndex;i++){
+    TestInfoRow(table, 0);
+    _gcvt(_diagMsgMap[i].time,10,num);
+    TestInfoCell(table, num);
+    if(_diagMsgMap[i].dir == RxMsg){
+      write("%-10s %-10s %-10d %-20s",num,dir_Rx,_diagMsgMap[i].dateLen,_diagMsgMap[i].date);
+      TestInfoCell(table, dir_Rx);
+    }else{
+      write("%-10s %-10s %-10d %-20s",num,dir_Tx,_diagMsgMap[i].dateLen,_diagMsgMap[i].date);
+      TestInfoCell(table, dir_Tx);
+    }
+    ltoa(_diagMsgMap[i].dateLen, num, 10);
+    TestInfoCell(table, num);
+    TestInfoCell(table, _diagMsgMap[i].date);
+    TestInfoCell(table, "");
+  }
+  WriteTextColor(1,0,0,0);
+  TestStep(0, "[报文]", table);
+  clearDiagMsg();
+}
+// 清空报文消息
+void clearDiagMsg(){
+  _msgMapIndex = 0;
+  _diagMsgMap.clear();
+}
+
+//=========================================工具函数========================================================
+// 调试函数，打印所有连接信息
+void printAllDiagConn(){
+  write("DiagMap len = %d",_diagMap.size());
+  for(long a:_diagMap){
+    // 打印所有连接信息
+    write("handle = %d",a);
+    write("respInd = %d",getDiagRespInd(a));
+    write("delayTime = %d",getDiagDelayTime(a));
+    write("PendingCount = %d",getDiagPendingCount(a));
+    write("p2server = %d",getDiagP2server(a));
+    write("p2_server = %d",getDiagP2_server(a));
+    write("timeout = %d",getDiagTimeout(a));
+    write("reqLength = %d",getDiagReqLength(a));
+    write("respLength = %d",getDiagRespLength(a));
+  }
+}
+// 将消息的byte数组转换为char数组，方便打印
+void msgByteToChar(byte byteArray[], long length, char charString[]) {
+    long charIndex,i,charLen,max; 
+    char highNibble;
+    char lowNibble;
+    charIndex = 0; 
+    charLen = (elCount(charString)-1)/3;
+    max = length<charLen ? length:charLen;
+    for (i = 0; i < max; i++) {
+      highNibble = byteArray[i] >> 4 & 0x0F;
+      lowNibble = byteArray[i] & 0x0F;
+      if(highNibble < 10){
+        charString[charIndex++] = highNibble + 48;
+      }else{
+        charString[charIndex++] = highNibble + 55;
+      }
+      if(lowNibble < 10){
+        charString[charIndex++] = lowNibble + 48;
+      }else{
+        charString[charIndex++] = lowNibble + 55;
+      }
+      charString[charIndex++] = ' ';
+    }
+    charString[charIndex] = '\0'; 
+}

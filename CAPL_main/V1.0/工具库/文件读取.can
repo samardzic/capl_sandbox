@@ -1,0 +1,115 @@
+/*@!Encoding:936*/
+/**
+  * @Author: fanshuhua
+  * @version 1.0
+  */
+includes
+{
+  #include "打印增强.can"
+  #include "CRC32.can"
+}
+
+variables
+{
+  struct GAC_Bin{
+    byte fileBuffer[1024*1024*10];
+    dword fileLen;
+    int NOAR;//Number Of Address Region
+    byte AddressRegion[10][8];
+    byte fileBlock[10][1024*1024];
+    dword fileBlockLen[10];
+    byte erasingMemory[8];
+    byte crc[4];
+  };
+}
+// 解析示例
+void flashDriverAnalysis(char driverPath[],struct GAC_Bin gacDriverBin){
+ 
+  dword fileBufferIndex = 0,i; 
+  gacDriverBin.fileLen=fileGetBinaryBlock(driverPath,gacDriverBin.fileBuffer);
+  
+  gacDriverBin.NOAR = gacDriverBin.fileBuffer[0];//获取总共有多少个文件块
+  fileBufferIndex += 1;
+//  write("gacDriverBin.fileLen %d",gacDriverBin.fileLen);
+  
+  for(i=0;i<gacDriverBin.NOAR;i++){
+    dword BlockSize;
+    memcpy_off(gacDriverBin.AddressRegion[i],0,gacDriverBin.fileBuffer,fileBufferIndex,8);
+    BlockSize = gacDriverBin.AddressRegion[i][4];
+    BlockSize <<= 8;
+    BlockSize += gacDriverBin.AddressRegion[i][5];
+    BlockSize <<= 8;
+    BlockSize += gacDriverBin.AddressRegion[i][6];
+    BlockSize <<= 8;
+    BlockSize += gacDriverBin.AddressRegion[i][7];
+    gacDriverBin.fileBlockLen[i] = BlockSize;
+    fileBufferIndex += 8;
+    write("BlockSize %x",BlockSize);
+    print(gacDriverBin.AddressRegion[i]);
+  }
+  
+  // 按照文件快分割
+  for(i=0;i<gacDriverBin.NOAR;i++){
+    memcpy_off(gacDriverBin.fileBlock[i],0,gacDriverBin.fileBuffer,fileBufferIndex,gacDriverBin.fileBlockLen[i]);
+    fileBufferIndex+=gacDriverBin.fileBlockLen[i];
+  }
+  crc32(gacDriverBin.fileBlock[0],0,gacDriverBin.fileBlockLen[0],gacDriverBin.crc);
+}
+// 解析App文件
+void AppAnalysis(char path[],struct GAC_Bin gacBin){
+ 
+  dword fileBufferIndex = 0,i,erasingMemory; 
+  gacBin.fileLen=fileGetBinaryBlock(path,gacBin.fileBuffer);
+  fileBufferIndex = 0; // 如果这里不重新赋值0，则依然会继承上一次的函数调用后的数据
+  /*
+  假如0x00-0x03是CRC32校验数据
+  那么直接拷贝就行
+  */
+  memcpy_off(gacBin.crc,0,gacBin.fileBuffer,0x00,4); //提取CRC校验数据
+  print(gacBin.crc);
+  
+  /*
+
+  中间省略了一些代码，这里不做演示
+
+  */
+  
+  // 内存擦除数据计算
+  memcpy_off(gacBin.erasingMemory,0,gacBin.AddressRegion[0],0,4);
+  erasingMemory = byteToDword(gacBin.AddressRegion[gacBin.NOAR-1],0);
+  erasingMemory = erasingMemory - byteToDword(gacBin.AddressRegion[0],0);
+  erasingMemory = erasingMemory + byteToDword(gacBin.AddressRegion[gacBin.NOAR-1],4);
+  dwordToByte(erasingMemory,gacBin.erasingMemory,4);
+//  write("erasingMemory %x",erasingMemory);
+//  print(gacBin.erasingMemory);
+}
+dword byteToDword(byte b[],long off){
+  dword a;
+  if(elCount(b) < 4){
+    write("dwordToByte：byte长度不符合要求");
+    return -1;
+  }
+    a = b[3+off];
+    a <<= 8;
+    a += b[2+off];
+    a <<= 8;
+    a += b[1+off];
+    a <<= 8;
+    a += b[0+off];
+  return a;
+}
+void dwordToByte(dword a,byte b[],long off){
+  b[0+off]=a;
+  b[1+off]=a>>8;
+  b[2+off]=a>>16;
+  b[3+off]=a>>24;
+}
+long fileGetBinaryBlock(char path[],byte buffer[]){
+  long i,handle;
+  handle = openFileRead(path,1);
+  if ( handle != 0){
+    i=fileGetBinaryBlock(buffer,elcount(buffer),handle);
+  }
+  fileClose (handle);
+  return i;
+}

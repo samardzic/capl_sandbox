@@ -1,0 +1,77 @@
+﻿/*@!Encoding:65001*/
+includes
+{
+  #include "诊断发送和接收.can"
+  #include "output增强.can"
+}
+
+variables
+{
+  struct DTC_NodeLoss{
+    word msgId;
+    int BRS;
+    int FDF;
+    int DLC;
+    dword dtcNumber;  //DTC故障码
+    long conditions;  // 故障成立时间
+  };
+  struct DTC_NodeLoss dtcArr[100];
+  int dtcArrIndex = 0;
+}
+MainTest(){
+  setTimer(outputTimer,1);
+  fun();
+}
+testcase fun(){
+    setDtcArr(0x20b,1,1,8,0xF1D087,500);
+
+    startTestNodeLoss(dtcArr[0]);
+}
+void startTestNodeLoss(struct DTC_NodeLoss dtc){
+  // 创建一个消息，设置开始周期和结束周期
+  message * msg;
+  long startCycle,msgHandle,diagHandle,endCycle,len;
+  byte respData[100];
+  startCycle = 10;
+  endCycle = dtc.conditions+(dtc.conditions*0.5);
+  diagHandle=CreateCANFDConnection(0x670,0x6F0);
+
+  msg.id = dtc.msgId;
+  msg.BRS = dtc.BRS;
+  msg.FDF = dtc.FDF;
+  msg.DLC = dtc.DLC;
+
+  for(;startCycle<endCycle;startCycle+=(dtc.conditions*0.025)){
+    msgHandle=outputTimer(msg,startCycle);
+    sendDiag14FFFFFF(diagHandle);
+    
+    testWaitForTimeout(dtc.conditions*2);
+    
+    sendDiag190209(diagHandle);
+    len=getDiagResp(respData);
+    if(analysisDTCNum(respData,len,dtc.dtcNumber)==1){
+      write("故障成立时间为 %d",startCycle);
+      break;
+    }
+    deleteOutputTimer(msgHandle);
+  }
+}
+long analysisDTCNum(byte respData[],long len,dword dtc){
+  int i;
+  for(i=0;i<len-2;i+=1){
+    if(respData[i]==(dtc>>16)&&respData[i+1]==(dtc>>8 & 0xFF)&&respData[i+2]==(dtc & 0xFF)){
+      write("DTC故障码为 %d",dtc);
+      return 1;
+    }
+  }
+  return 0;
+}
+void setDtcArr(word msgId,int BRS,int FDF,int DLC,dword dtcNumber,long conditions){
+  dtcArr[dtcArrIndex].msgId = msgId;
+  dtcArr[dtcArrIndex].BRS = BRS;
+  dtcArr[dtcArrIndex].FDF = FDF;
+  dtcArr[dtcArrIndex].DLC = DLC;
+  dtcArr[dtcArrIndex].dtcNumber = dtcNumber;
+  dtcArr[dtcArrIndex].conditions = conditions;
+  dtcArrIndex++;
+}

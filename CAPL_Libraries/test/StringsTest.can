@@ -1,0 +1,381 @@
+/*@!Encoding:1250*/
+includes
+{
+  #include "..\main\Strings.cin"
+  #include "..\main\TestUnit.cin"
+}
+
+variables
+{
+  
+}
+
+void MainTest ()
+{
+  setInitial();
+//  compareStrings_Test();
+//  isPalindrome_Test();
+//  endsWith_Test();
+//  startsWith_Test();
+//  upper_Test();
+//  lower_Test();
+//  capitalize_Test();
+//  isAlpha_Test();
+//  isAlnum_Test();
+  isNumeric_Test();
+  isLower_Test();
+  isUpper_Test();
+  swapcase_Test();
+  zfill_Test();
+  printTotalSummary();
+}
+
+testcase compareStrings_Test(){
+  printTestCaseTitle();
+  assertTrue(compareStrings("abc", "abc"), "compareStrings(\"abc\", \"abc\")");
+  assertTrue(compareStrings("ABC", "ABC"), "compareStrings(\"ABC\", \"ABC\")");
+  assertFail(compareStrings("ABC", "abc"), "compareStrings(\"ABC\", \"abc\")");
+  assertFail(compareStrings("abcx", "abc"), "compareStrings(\"abcx\", \"abc\")");
+  assertFail(compareStrings("abc", "abcx"), "compareStrings(\"abc\", \"abcx\")");
+  assertFail(compareStrings("abxd", "abcx"), "compareStrings(\"abxd\", \"abcx\")");
+  printTestSummary();
+}
+
+testcase isPalindrome_Test(){
+  printTestCaseTitle();
+  assertTrue(isPalindrome("kotok"), "isPalindrome(\"kotok\")");
+  assertTrue(isPalindrome("kottok"), "isPalindrome(\"kottok\")");
+  assertFail(isPalindrome("kotkok"), "isPalindrome(\"kotkok\")");
+  assertFail(isPalindrome("abcde"), "isPalindrome(\"abcde\")");
+  assertFail(isPalindrome("abcdba"), "isPalindrome(\"abcdba\")");
+  assertTrue(isPalindrome("101"), "isPalindrome(\"101\")");
+  assertFail(isPalindrome(""), "isPalindrome(\"\")");
+  printTestSummary();
+}
+testcase endsWith_Test(){
+  printTestCaseTitle();
+  assertTrue(endsWith("kotek", "ek"), "endsWith(\"kotek\", \"ek\")");
+  assertTrue(endsWith("kotek", "kotek"), "endsWith(\"kotek\", \"kotek\")");
+  assertTrue(endsWith("pies", "ies"), "endsWith(\"pies\", \"ies\")");
+  assertFail(endsWith("kotek", "Ek"), "endsWith(\"kotek\", \"Ek\")");
+  assertFail(endsWith("kotek", "etk"), "endsWith(\"kotek\", \"etk\")");
+  assertFail(endsWith("kotek", "skotek"), "endsWith(\"kotek\", \"skotek\")");
+  printTestSummary();
+}
+testcase startsWith_Test(){
+  printTestCaseTitle();
+  assertTrue(startsWith("kotek","kot"), "startsWith(\"kotek\",\"kot\")");
+  assertTrue(startsWith("kotek","kotek"), "startsWith(\"kotek\",\"kotek\")");
+  assertTrue(startsWith("pies", "pie"), "startsWith(\"pies\", \"pie\")");
+  assertFail(startsWith("kotek", "Kot"), "startsWith(\"kotek\", \"Kot\")");
+  assertFail(startsWith("kotek", "tok"), "startsWith(\"kotek\", \"tok\")");
+  assertFail(startsWith("kotek", "kotekk"), "startsWith(\"kotek\", \"kotekk\")");
+  printTestSummary();
+}
+
+testcase upper_Test(){
+  printTestCaseTitle();
+  upper_Test1();
+  upper_Test2();
+  upper_Test3();
+  upper_Test4();
+  upper_Test5();
+  upper_Test6();
+  upper_Test7();
+  upper_Test8();
+  printTestSummary();
+}
+upper_Test1(){
+  char string[100] = "kotek";
+  upper(string);
+  assertTrue(compareStrings(string, "KOTEK"), "upper(\"kotek\")");
+}
+upper_Test2(){
+  char string[100] = "koTEk";
+  upper(string);
+  assertTrue(compareStrings(string, "KOTEK"), "upper(\"koTEk\")");
+}
+upper_Test3(){
+  char string[100] = "KOTEK";
+  upper(string);
+  assertTrue(compareStrings(string, "KOTEK"), "upper(\"KOTEK\")");
+}
+upper_Test4(){
+  char string[100] = "kot i pies";
+  upper(string);
+  assertTrue(compareStrings(string, "KOT I PIES"), "upper(\"kot i pies\")");
+}
+upper_Test5(){
+  char string[100] = "Kot i Pies";
+  upper(string);
+  assertTrue(compareStrings(string, "KOT I PIES"), "upper(\"Kot i Pies\")");
+}
+upper_Test6(){
+  char string[100] = "KOT I PIES";
+  upper(string);
+  assertTrue(compareStrings(string, "KOT I PIES"), "upper(\"KOT I PIES\")");
+}
+upper_Test7(){
+  char string[100] = "kotek123";
+  upper(string);
+  assertTrue(compareStrings(string, "KOTEK123"), "upper(\"kotek123\")");
+}
+upper_Test8(){
+  char string[100] = "123";
+  upper(string);
+  assertTrue(compareStrings(string, "123"), "upper(\"123\")");
+}
+testcase lower_Test(){
+  printTestCaseTitle();
+  lower_Test1();
+  lower_Test2();
+  lower_Test3();
+  lower_Test4();
+  lower_Test5();
+  lower_Test6();
+  lower_Test7();
+  lower_Test8();
+  printTestSummary();
+}
+lower_Test1(){
+  char string[100] = "KOTEK";
+  lower(string);
+  assertTrue(compareStrings(string, "kotek"), "lower(\"KOTEK\")");
+}
+lower_Test2(){
+  char string[100] = "KOteK";
+  lower(string);
+  assertTrue(compareStrings(string, "kotek"), "lower(\"KOteK\")");
+}
+lower_Test3(){
+  char string[100] = "kotek";
+  lower(string);
+  assertTrue(compareStrings(string, "kotek"), "lower(\"kotek\")");
+}
+lower_Test4(){
+  char string[100] = "KOT I PIES";
+  lower(string);
+  assertTrue(compareStrings(string, "kot i pies"), "lower(\"KOT I PIES\")");
+}
+lower_Test5(){
+  char string[100] = "Kot I Pies";
+  lower(string);
+  assertTrue(compareStrings(string, "kot i pies"), "lower(\"Kot I Pies\")");
+}
+lower_Test6(){
+  char string[100] = "kot i pies";
+  lower(string);
+  assertTrue(compareStrings(string, "kot i pies"), "lower(\"kot i pies\")");
+}
+lower_Test7(){
+  char string[100] = "KOTEK123";
+  lower(string);
+  assertTrue(compareStrings(string, "kotek123"), "lower(\"KOTEK123\")");
+}
+lower_Test8(){
+  char string[100] = "123";
+  lower(string);
+  assertTrue(compareStrings(string, "123"), "lower(\"123\")");
+}
+
+testcase capitalize_Test(){
+  printTestCaseTitle();
+  capitalize_Test1();
+  capitalize_Test2();
+  capitalize_Test3();
+  capitalize_Test4();
+  capitalize_Test5();
+  capitalize_Test6();
+  capitalize_Test7();
+  capitalize_Test8();
+  printTestSummary();
+}
+capitalize_Test1(){
+  char string[100] = "KOTEK";
+  capitalize(string);
+  assertTrue(compareStrings(string, "Kotek"), "capitalize(\"KOTEK\")");
+}
+capitalize_Test2(){
+  char string[100] = "KOteK";
+  capitalize(string);
+  assertTrue(compareStrings(string, "Kotek"), "capitalize(\"KOteK\")");
+}
+capitalize_Test3(){
+  char string[100] = "kotek";
+  capitalize(string);
+  assertTrue(compareStrings(string, "Kotek"), "capitalize(\"kotek\")");
+}
+capitalize_Test4(){
+  char string[100] = "KOT I PIES";
+  capitalize(string);
+  assertTrue(compareStrings(string, "Kot i pies"), "capitalize(\"KOT I PIES\")");
+}
+capitalize_Test5(){
+  char string[100] = "kot i pies";
+  capitalize(string);
+  assertTrue(compareStrings(string, "Kot i pies"), "capitalize(\"kot i pies\")");
+}
+capitalize_Test6(){
+  char string[100] = "Kot I Pies";
+  capitalize(string);
+  assertTrue(compareStrings(string, "Kot i pies"), "capitalize(\"Kot I Pies\")");
+}
+capitalize_Test7(){
+  char string[100] = "koteK123";
+  capitalize(string);
+  assertTrue(compareStrings(string, "Kotek123"), "capitalize(\"koteK123\")");
+}
+capitalize_Test8(){
+  char string[100] = "123";
+  capitalize(string);
+  assertTrue(compareStrings(string, "123"), "capitalize(\"123\")");
+}
+
+testcase isAlpha_Test(){
+  printTestCaseTitle();
+  assertTrue(isAlpha("KotoK"), "isAlpha(\"KotoK\")");
+  assertFail(isAlpha("KotoK123"), "isAlpha(\"KotoK123\")");
+  assertFail(isAlpha("Kot i pies"), "isAlpha(\"Kot i pies\")");
+  assertFail(isAlpha("123"), "isAlpha(\"123\")");
+  printTestSummary();
+}
+
+testcase isAlnum_Test(){
+  printTestCaseTitle();
+  assertTrue(isAlnum("KotoK123"), "isAlnum(\"KotoK123\")");
+  assertTrue(isAlnum("KotoK"), "isAlnum(\"KotoK\")");
+  assertTrue(isAlnum("123"), "isAlnum(\"123\")");
+  assertFail(isAlnum("Kot i 123"), "isAlnum(\"Kot i 123\")");
+  printTestSummary();
+}
+
+testcase isNumeric_Test(){
+  printTestCaseTitle();
+  assertTrue(isNumeric("123"), "isNumeric(\"123\")");
+  assertFail(isNumeric("-1"), "isNumeric(\"-1\")");
+  assertFail(isNumeric("1.5"), "isNumeric(\"1.5\")");
+  assertFail(isNumeric("1,5"), "isNumeric(\"1,5\")");
+  assertFail(isNumeric("KotoK123"), "isNumeric(\"KotoK123\")");
+  assertFail(isNumeric("KotoK"), "isNumeric(\"KotoK\")");
+  assertFail(isNumeric("Kot i 123"), "isNumeric(\"Kot i 123\")");
+  printTestSummary();
+}
+
+testcase isLower_Test(){
+  printTestCaseTitle();
+  assertTrue(isLower("kotek"), "isLower(\"kotek\")");
+  assertFail(isLower("KOTEK"), "isLower(\"KOTEK\")");
+  assertFail(isLower("kotEk"), "isLower(\"kotEk\")");
+  assertFail(isLower("123"), "isLower(\"123\")");
+  assertFail(isLower("kotek123"), "isLower(\"kotek123\")");
+  assertFail(isLower("kot i pies"), "isLower(\"kot i pies\")");
+  assertFail(isLower("kot i 123"), "isLower(\"kot i 123\")");
+  printTestSummary();
+}
+
+testcase isUpper_Test(){
+  printTestCaseTitle();
+  assertTrue(isUpper("KOTEK"), "isUpper(\"KOTEK\")");
+  assertFail(isUpper("kotek"), "isUpper(\"kotek\")");
+  assertFail(isUpper("KOTeK"), "isUpper(\"KOTeK\")");
+  assertFail(isUpper("123"), "isUpper(\"123\")");
+  assertFail(isUpper("KOTEK123"), "isUpper(\"KOTEK123\")");
+  assertFail(isUpper("KOT I PIES"), "isUpper(\"KOT I PIES\")");
+  assertFail(isUpper("KOT I 123"), "isUpper(\"KOT I 123\")");
+  printTestSummary();
+}
+
+
+testcase swapcase_Test(){
+  printTestCaseTitle();
+  swapcase_Test1();
+  swapcase_Test2();
+  swapcase_Test3();
+  swapcase_Test4();
+  swapcase_Test5();
+  swapcase_Test6();
+  printTestSummary();
+}
+
+swapcase_Test1(){
+  char string[100] = "KOTEK";
+  swapcase(string);
+  assertTrue(compareStrings(string, "kotek"), "swapcase(\"KOTEK\")");
+}
+
+swapcase_Test2(){
+  char string[100] = "kotek";
+  swapcase(string);
+  assertTrue(compareStrings(string, "KOTEK"), "swapcase(\"kotek\")");
+}
+
+swapcase_Test3(){
+  char string[100] = "kOtEk";
+  swapcase(string);
+  assertTrue(compareStrings(string, "KoTeK"), "swapcase(\"kOtEk\")");
+}
+
+swapcase_Test4(){
+  char string[100] = "123";
+  swapcase(string);
+  assertTrue(compareStrings(string, "123"), "swapcase(\"123\")");
+}
+
+swapcase_Test5(){
+  char string[100] = "1kOtEk23";
+  swapcase(string);
+  assertTrue(compareStrings(string, "1KoTeK23"), "swapcase(\"1kOtEk23\")");
+}
+
+swapcase_Test6(){
+  char string[100] = "koT i PiEs";
+  swapcase(string);
+  assertTrue(compareStrings(string, "KOt I pIeS"), "swapcase(\"koT i PiEs\")");
+}
+
+testcase zfill_Test(){
+  printTestCaseTitle();
+  zfill_Test1();
+  zfill_Test2();
+  zfill_Test3();
+  zfill_Test4();
+  zfill_Test5();
+  zfill_Test6();
+  printTestSummary();
+}
+
+zfill_Test1(){
+  char string[100] = "123";
+  zfill(string, 5);
+  assertTrue(compareStrings(string, "00000123"), "zfill(\"123\"), 5);");
+}
+
+zfill_Test2(){
+  char string[100] = "123";
+  zfill(string, 3);
+  assertTrue(compareStrings(string, "000123"), "zfill(\"123\"), 3);");
+}
+
+zfill_Test3(){
+  char string[100] = "123";
+  zfill(string, 0);
+  assertTrue(compareStrings(string, "123"), "zfill(\"123\"), 0);");
+}
+
+zfill_Test4(){
+  char string[5] = "123";
+  zfill(string, 2);
+  assertTrue(compareStrings(string, "0123"), "zfill(\"123\"), 2);");
+}
+
+zfill_Test5(){
+  char string[4] = "123";
+  zfill(string, 2);
+  assertTrue(compareStrings(string, "123"), "zfill(\"123\"), 2);");
+}
+
+zfill_Test6(){
+  char string[100] = "123";
+  zfill(string, -1);
+  assertTrue(compareStrings(string, "123"), "zfill(\"123\"), -1);");
+}

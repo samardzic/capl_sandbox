@@ -1,0 +1,216 @@
+﻿/*@!Encoding:65001*/
+includes
+{
+  #include "..\\util\\TypeConversionUtil.can"
+}
+
+variables
+{
+    enum LogLevel{
+        debug=0,
+        info = 1,
+        warning = 2,
+        pass = 3,
+        error = 4
+    };
+    // 日志分类
+    enum LogCategory{
+        // 测试用例日志
+        LOG_TESTCASE,
+        // 诊断日志
+        LOG_DIAGNOSTIC,
+        // 报文日志
+        LOG_MESSAGE,
+        // 断言
+        LOG_ASSERT,
+        // 方法debug日志
+        LOG_Function
+    };
+    struct logging{
+        enum LogLevel consoleOutputLevel;
+        enum LogLevel reportOutputLevel;
+        char FuncName[512];
+    };
+    struct logging LoggingConfig;
+}
+setLoggingLevel(enum LogLevel consoleOutputLevel,enum LogLevel reportOutputLevel){
+  LoggingConfig.consoleOutputLevel = consoleOutputLevel;
+  LoggingConfig.reportOutputLevel = reportOutputLevel;
+}
+setLogFuncName(char FuncName[]){
+  strncpy(LoggingConfig.FuncName,FuncName,strlen(FuncName)+1);
+}
+clearLogFuncName(){
+  strncpy(LoggingConfig.FuncName,"",0);
+}
+void logging(enum LogLevel level, enum LogCategory category, char log[])
+{
+    float loggingTime;
+    char lv[50],ct[50];
+    char Str_Debug[8] = "[DEBUG]";
+    char Str_Info[7] = "[Info]";
+    char Str_Waring[10] = "[WARNING]";
+    char Str_Error[8] = "[ERROR]";
+
+    char Str__LOG_TESTCASE[10] = "[测试]";
+    char Str__LOG_DIAGNOSTIC[10] = "[诊断]";
+    char Str__LOG_MESSAGE[10] = "[报文]";
+    char Str__LOG_ASSERT[10] = "[断言]";
+    char Str__LOG_Function[10] = "[函数]";
+  
+    
+    loggingTime = timeNowFloat()/100000.0;
+    switch(category){
+        case LOG_TESTCASE:
+            strncpy(ct,Str__LOG_TESTCASE,strlen(Str__LOG_TESTCASE)+1);
+            break;
+        case LOG_DIAGNOSTIC:
+            strncpy(ct,Str__LOG_DIAGNOSTIC,strlen(Str__LOG_DIAGNOSTIC)+1);
+            break;
+        case LOG_MESSAGE:
+            strncpy(ct,Str__LOG_MESSAGE,strlen(Str__LOG_MESSAGE)+1);
+            break;
+      case LOG_ASSERT:
+            strncpy(ct,Str__LOG_ASSERT,strlen(Str__LOG_MESSAGE)+1);
+            break;
+      case LOG_Function:
+            strncpy(ct,Str__LOG_Function,strlen(Str__LOG_MESSAGE)+1);
+            break;
+        default:
+            strncpy(ct,Str__LOG_TESTCASE,strlen(Str__LOG_TESTCASE)+1);
+            break;
+    }
+    switch(level){
+        case debug:
+            WriteTextColor(1,120,146,98);
+            strncpy(lv,Str_Debug,strlen(Str_Debug)+1);
+            break;
+        case info:
+            strncpy(lv,Str_Info,strlen(Str_Info)+1);
+            break;
+        case warning:
+            WriteTextColor(1,249,150,90);
+            strncpy(lv,Str_Waring,strlen(Str_Waring)+1);
+            break;
+        case error:
+            WriteTextColor(1,255,0,0);
+            strncpy(lv,Str_Error,strlen(Str_Error)+1);
+            break;
+        default:
+            strncpy(lv,Str_Info,strlen(Str_Info)+1);
+            break;
+    }
+    if(level >= LoggingConfig.consoleOutputLevel){
+        if(category == LOG_MESSAGE){
+          write("%-8s %-10s %-10s %-20s %-20s","",lv,ct,LoggingConfig.FuncName,log);
+        }else{
+          write("%-8.2f %-10s %-10s %-20s %-20s",loggingTime,lv,ct,LoggingConfig.FuncName,log);
+        }
+    }
+    if(level >= LoggingConfig.reportOutputLevel){
+        if(level == debug)
+            testStep(ct,log);
+        if(level == info){
+          if(category == LOG_ASSERT){
+            testStepPass(ct,log);
+          }else if(category == LOG_MESSAGE){
+            testStep("",log);
+          }else{
+            testStep(ct,log);
+          }
+        }
+        if(level == warning)
+            testStepWarning(ct,log);
+        if(level == error)
+            testStepFail(ct,log);
+    }
+    WriteTextColor(1,0,0,0);
+}
+
+void logging(char log[]){
+    logging(info, LOG_TESTCASE, log);
+}
+void logging(char log[],long a){
+    logging(info, LOG_TESTCASE, log,a);
+}
+void logging(enum LogLevel level,char log[]){
+    logging(level, LOG_TESTCASE, log);
+}
+void logging(enum LogLevel level,char log[],long a){
+    logging(level, LOG_TESTCASE, log,a);
+}
+void logging(enum LogLevel level, enum LogCategory category,char log[],byte logByte[],long len){
+    // byte[] 转 char[]
+    char buffer[512],logChar[512];
+    buffer[0] = '\0';
+    byteArrayToCharString(logByte,len,logChar);
+    strncat(buffer,log,512);
+    strncat(buffer,logChar,512);
+    logging(level, category, buffer);
+}
+void logging(enum LogLevel level,enum LogCategory category,char log[],dword a){
+    char s1[9],buffer[512];
+    // 重置char数组，避免干扰
+    s1[0] = '\0';
+    buffer[0] = '\0';
+    ltoa(a,s1,10);
+    strncat(buffer,log,512);
+    strncat(buffer,s1,512);
+    logging(level, category, buffer);
+}
+void logging(enum LogLevel level,enum LogCategory category,char log[],char log2[]){
+    char buffer[512];
+    // 重置char数组，避免干扰
+    buffer[0] = '\0';
+    strncat(buffer,log,512);
+    strncat(buffer,log2,512);
+    logging(level, category, buffer);
+}
+void logging(enum LogLevel level,enum LogCategory category,char log[],dword a,char log2[]){
+    char s1[9],buffer[512];
+    // 重置char数组，避免干扰
+    s1[0] = '\0';
+    buffer[0] = '\0';
+    ltoa(a,s1,10);
+    strncat(buffer,log,512);
+    strncat(buffer,s1,512);
+    strncat(buffer,log2,512);
+    logging(level, category, buffer);
+}
+void logging(enum LogLevel level,enum LogCategory category,char log[],dword a,char log2[],dword b){
+    char s1[9],buffer[512];
+    // 重置char数组，避免干扰
+    s1[0] = '\0';
+    buffer[0] = '\0';
+    ltoa(a,s1,10);
+    strncat(buffer,log,512);
+    strncat(buffer,s1,512);
+    strncat(buffer,log2,512);
+    s1[0] = '\0';
+    ltoa(b,s1,10);
+    strncat(buffer,s1,512);
+    logging(level, category, buffer);
+}
+//==============================================byte ============
+void logging(byte log[],long len){
+    logging(info, LOG_TESTCASE, log,len);
+}
+void logging(enum LogLevel level,byte log[],long len){
+    logging(level, LOG_TESTCASE, log,len);
+}
+void logging(enum LogCategory category,byte log[],long len){
+    logging(info, category, log,len);
+}
+void logging(enum LogLevel level, enum LogCategory category,byte log[],long len){
+    // byte[] 转 char[]
+    char logChar[512];
+    byteArrayToCharString(log,len,logChar);
+    logging(level, category, logChar);
+}
+//void logging(enum LogLevel level, enum LogCategory category,char log[],byte log2[],long log2Len){
+////    // byte[] 转 char[]
+////    char logChar[512];
+////    byteArrayToCharString(log2,log2Len,logChar);
+////    logging(level, category, log,logChar);
+//}
+

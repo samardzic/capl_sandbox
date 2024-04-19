@@ -1,0 +1,554 @@
+﻿/*@!Encoding:936*/
+includes
+{
+  #include "打印增强.can"
+}
+
+variables
+{
+  struct Diag{
+    long handle; // 句柄
+    int diagReq; // // 0 无应答 ， 1有应答， 2流控帧，3 NRC 0x78
+    dword setDelay; //延迟发送时间
+    word p2server;
+    word p2_server;// p2*server
+    word timeout;
+    
+    long reqLength;// 发送的诊断服务数据
+    byte reqData[4096];
+    word respLength; // 诊断响应的实际长度
+    byte respData[4096]; 
+  }Diag;
+  msTimer tSendAbortTimer_ms;
+  msTimer P2Timeout; //计算p2server和p2*server超时
+}
+
+void setP2Server(word p2server){
+  Diag.p2server = p2server;
+}
+void setP2_Server(word P2_Server){
+  Diag.P2_Server = P2_Server;
+}
+void setTimeout(word timeout){
+  Diag.timeout = timeout;
+}
+/*
+CreateCANFDConnection 创建诊断连接对象，返回连接句柄，需要加载osektp.dll，默认为CANFD类型
+WORD txId 诊断发送ID
+WORD rxId 诊断响应ID
+
+return long 连接句柄
+*/
+long CreateCANFDConnection( WORD txId, WORD rxId)
+{
+  long handle;
+  handle = CanTpCreateConnection(0);          // normal mode
+  CanTpSetTxIdentifier( handle, txId);
+  CanTpSetRxIdentifier( handle, rxId);
+  CanTpSetMaxCANFDFrameLength( handle, 64);  // activate CAN FD
+  CanTpSetBitRateSwitch( handle, 1);         // activate BRS
+  CanTpSetPadding(handle,0xAA);
+  if(handle <= 0){
+    Write("CanTpCreateConnection失败 handle = %d",handle);
+  }
+  if(Diag.p2_server == 0){
+    setP2_Server(5000);
+  }
+  if(Diag.p2server == 0){
+    setP2Server(50);
+  }
+  if(Diag.timeout == 0){
+    setTimeout(200);
+  }
+  Diag.handle = handle;
+  CanTpFI_Enable(handle); //开启故障激活注入 可以使用所有CanTpFI开头的函数
+  return handle;
+}
+
+
+
+
+long CreateCANConnection(WORD txId, WORD rxId){
+  long handle;
+  handle = CanTpCreateConnection(0);
+  CanTpSetTxIdentifier( handle, txId);
+  CanTpSetRxIdentifier( handle, rxId);
+  if(Diag.p2_server == 0){
+    setP2_Server(5000);
+  }
+  if(Diag.p2server == 0){
+    setP2Server(50);
+  }
+  if(Diag.timeout == 0){
+    setTimeout(200);
+  }
+  Diag.handle = handle;
+  return handle;
+}
+
+/*
+sendDiag 发送诊断请求，发送数据长度为传入数组的长度
+long diagHandle 诊断句柄，通过CreateCANFDConnection获得
+byte data[]  诊断数据，例如{0x10, 0x03}
+*/
+void sendDiag(long diagHandle,byte data[]){
+  sendDiag(diagHandle, data, elCount(data));
+}
+
+
+/*
+sendDiag 发送诊断请求，且指定长度
+long diagHandle 诊断句柄，通过CreateCANFDConnection获得
+byte data[]  诊断数据，例如{0x10, 0x03}
+int length   data中有效数据长度
+*/
+void sendDiag(long diagHandle,byte data[],long length){
+  Diag.diagReq = 0;
+  Diag.reqLength = length;
+  memcpy(Diag.reqData,data,length);
+  CanTpSendData(diagHandle, data, length);
+  setTimer(P2Timeout,Diag.p2server);
+  waitDiagResp();
+}
+int sendDiagWithNoResponse(long diagHandle,byte data[]){
+  return sendDiagWithNoResponse(diagHandle, data, elCount(data));
+}
+int sendDiagWithNoResponse(long diagHandle,byte data[],int length){
+  
+  Diag.diagReq = 0;
+  Diag.reqLength = length;
+  memcpy(Diag.reqData,data,length);
+  CanTpSendData(diagHandle, data, length);
+  return waitNoResponse();
+}
+
+/*
+停止发送诊断报文
+*/
+void stopSendDiag(long handle,dword ms){
+  Diag.handle = handle;
+  settimer( tSendAbortTimer_ms, ms);
+}
+on timer tSendAbortTimer_ms
+{
+  CanTpFI_AbortTransmission(Diag.handle);
+}
+on timer P2Timeout{
+  char outputBuffer[100];
+  byteArrayToCharString(Diag.reqData,Diag.reqLength,outputBuffer);
+  testStep("请求",outputBuffer);
+  write("诊断请求响应超时！");
+  TestStepFail("超时","诊断请求响应超时");
+}
+void waitDiagResp(){ // 总感觉这里有个大坑
+  word count;
+  count = 0;
+  while(Diag.diagReq == 0 || Diag.diagReq == 3){ //未响应或者响应NRC 0x78
+    if(count == Diag.timeout && Diag.diagReq == 0){ 
+      Diag.respLength = 0;
+      Diag.setDelay = 0;
+      break;
+    }
+    if(count == (Diag.p2_server+1000) && Diag.diagReq == 0){ 
+      Diag.respLength = 0;
+      Diag.setDelay = 0;
+      break;
+    }
+    testWaitForTimeout(1);
+    count++;
+  };
+  count = 0;
+  while(Diag.diagReq == 3){
+    testWaitForTimeout(1);
+    count++;
+  };
+//  这里不再进行拷贝，响应数据和长度直接由CanTp_ReceptionInd回调函数拷贝到Diag.respData
+  Diag.diagReq = 0;
+}
+// 等待没有应答
+int waitNoResponse(){
+  word count;
+  count = 0;
+//  Write("waitNoResponse is running");
+  while(Diag.diagReq != 1){
+    testWaitForTimeout(1);
+    if(count == Diag.timeout){
+      break;
+    }
+    count++;
+  }
+  if(Diag.diagReq == 0){
+    Diag.respLength = 0; //防止上一次响应的数据污染
+    return 0;
+  }
+  count = Diag.diagReq;
+  Diag.diagReq = 0; 
+  return count;
+}
+/*
+getDiagResp 获取诊断响应数据，
+byte buffer[] 保存数据的数组
+
+return long  buffer有效长度
+*/
+long getDiagResp(byte buffer[]){
+  memcpy(buffer,Diag.respData,Diag.respLength);
+  return Diag.respLength;
+}
+// CAPL官方回调函数，用于接收诊断响应
+CanTp_ReceptionInd(long handle, byte data[])
+{
+  int i;
+  cancelTimer(P2Timeout);
+//  Write("CanTp_ReceptionInd is running ");
+  i=elCount(data);
+//  if((data[0]&0xF0) == 0x30){  // 流控帧不会调用这个函数！！！！
+//    Diag.respLength = i;
+//    memcpy(Diag.respData,data,i);
+//    Diag.diagReq = 2;
+//  Write("diagReq %d",Diag.diagReq);
+//    return;
+//  }
+  if(data[0]==0x7f && data[2]==0x78){
+    Diag.respLength = 0;
+    Diag.diagReq = 3;  // 表示当前处于NRC 0x78状态
+    setTimer(P2Timeout,Diag.p2_server);
+//    write("收到NRC 0x78,重新计时");
+    return;
+  }
+  memcpy(Diag.respData,data,i); //将获得的响应数据拷贝到Diag.respData
+  Diag.respLength = i;
+//  Write("diagReq %d",Diag.diagReq);
+  Diag.diagReq = 1;// 将接收标志位置一，表示已经收到了响应
+}
+
+
+void sendDiagDelay(long handle,dword ms){
+  Diag.handle = handle;
+  Diag.setDelay = ms;
+}
+void closeDiagDelay(){
+  Diag.setDelay = 0;
+}
+// CAPL官方回调函数，发送前回调函数
+void CanTp_PreSend( long handle, word msgDlc[], byte data[])
+{
+//  Write("CanTp_PreSend: msgDlc[0] = %d",msgDlc[0]);
+//  Write("CanTp_PreSend: data[0] = %x,data[1] = %x",data[0],data[1]);
+  if(data[0] == 3 && (data[1]&0xF0) == 0x30){//修改格式来发送流控帧
+    data[0]=data[1];
+    data[1]=data[2];
+    data[2]=data[3];
+    data[3]=CanTpGetPadding(handle);
+  }
+  if(Diag.setDelay > 0){
+    CanTpFI_SetDelay(Diag.setDelay * 1000); //执行延迟发送
+  }
+}
+
+void CanTp_ErrorInd( long connHandle, long error)
+{  
+  switch(error){
+    case 1:
+      write("CanTp_ErrorInd : 等待连续帧超时（Timeout waiting for Consecutive Frame.） ");
+      break;
+    case 2:
+      write("CanTp_ErrorInd : 等待流控帧超时（Timeout waiting for Flow Control Frame.） ");
+      break;
+    case 6:
+      write("CanTp_ErrorInd : 报文发送超时（Timeout while trying to send a CAN message.） ");
+      break;
+    case 8:
+      write("CanTp_ErrorInd : 接收器缓冲区溢出，即接收到流控制溢出帧。（Receiver buffer overflow, i.e. a Flow Control Overflow Frame was received.） ");
+      break;
+    case 11:
+      write("CanTp_ErrorInd : 数据传输已从CAPL程序中明确中止。（The data transfer has been aborted explicitly from the CAPL program.） ");
+      break;
+    default:
+      write("CanTp_ErrorInd : 未知错误 错误标识 %d，参见Error Codes (OSEK TP)",error);
+  }
+  Diag.respLength = 0; 
+  Diag.diagReq = 0;  // 修改这里会影响 waitNoResponse
+}
+
+OSEKTL_ErrorInd(int error){
+  switch(error){
+    case 1:
+      write("OSEKTL_ErrorInd : Timeout waiting for CF. ");
+      break;
+    default:
+      write("OSEKTL_ErrorInd : 未知错误");
+  }
+}
+
+
+/*
+sendDiag36 36服务专用的发送函数，
+long diagHandle 诊断句柄
+byte buffer[] 需要发送的数据
+long bufferlen  数据有效长度
+long buffertop 发送起始位置指针
+*/
+int sendDiag36(long diagHandle,byte buffer[],long bufferlen,long buffertop){
+  return sendDiag36(diagHandle,buffer,bufferlen,buffertop,130);
+}
+int sendDiag36(long diagHandle,byte buffer[],long bufferlen,long buffertop,dword segmentSize){
+  int i = 1,len;
+  byte q36[4096] = {0x36};
+  i = 1;
+  do{
+    q36[1] = i;
+    if(bufferlen - buffertop < segmentSize-2){
+      memcpy_off(q36,2,buffer,buffertop,bufferlen - buffertop);
+      sendDiag(diagHandle,q36,(bufferlen - buffertop)+2);
+      buffertop = bufferlen;
+    }else{
+      memcpy_off(q36,2,buffer,buffertop,segmentSize-2);
+      buffertop += segmentSize-2;
+      sendDiag(diagHandle,q36,segmentSize);
+    }
+    if(i == 0xFF){
+      i=0;
+    }else{
+      i++;
+    }
+    if(Diag.reqData[0] + 0x40 != Diag.respData[0]){
+      return 0;
+    }
+  }while(buffertop < bufferlen);
+  return 1;
+}
+
+void sendDiag1001(long diagHandle){
+  byte q1001[2]={0x10,0x01};
+  sendDiag(diagHandle,q1001);
+  testWaitForTimeout(500);
+}
+
+void sendDiag1003(long diagHandle){
+  byte request[2]={0x10,0x03};
+  sendDiag(diagHandle,request);
+  testWaitForTimeout(500);
+}
+
+void sendDiag1002(long diagHandle){
+  byte q1002[2]={0x10,0x02};
+  sendDiag(diagHandle,q1002);
+  testWaitForTimeout(500);
+}
+void sendDiag1101(long diagHandle){
+  byte q1101[2]={0x11,0x01};
+  sendDiag(diagHandle,q1101);
+  testWaitForTimeout(500);
+}
+
+void sendDiag14FFFFFF(long diagHandle){
+  byte q14[4]={0x14,0xFF,0xFF,0xFF};
+  sendDiag(diagHandle,q14);
+}
+void sendDiag190209(long diagHandle){
+  byte q19[3]={0x19,0x02,0x09};
+  sendDiag(diagHandle,q19);
+}
+void sendDiag22xxxx(long diagHandle,word did){
+  byte q22[3] = {0x22};
+  q22[1] = did >> 8;
+  q22[2] = did & 0xFF;
+  sendDiag(diagHandle,q22);
+}
+
+void sendDiag31010203(long diagHandle){
+  byte q31010203[4] = {0x31,0x01,0x02,0x03};
+  sendDiag(diagHandle,q31010203);
+}
+void sendDiag8501(long diagHandle){
+  byte q8501[2] = {0x85, 0x01};
+  sendDiag(diagHandle,q8501);
+}
+void sendDiag8502(long diagHandle){
+  byte q8502[2] = {0x85, 0x02};
+  sendDiag(diagHandle,q8502);
+}
+
+void sendDiag28xxxx(long diagHandle,word did){
+  byte q28[3] = {0x28};
+  q28[1] = did >> 8;
+  q28[2] = did & 0xFF;
+  sendDiag(diagHandle,q28);
+}
+
+void sendDiag27_seed(long diagHandle,byte lv){
+  byte reqSeed[2] = {0x27};
+  reqSeed[1]=lv;
+  sendDiag(diagHandle,reqSeed);
+}
+void sendDiag27_key(long diagHandle,byte lv,dword unlockKey){
+  byte reqKey[6] = {0x27};
+  reqKey[1]=lv+1;
+  reqKey[2]=unlockKey >> 24;
+  reqKey[3]=unlockKey >> 16;
+  reqKey[4]=unlockKey >> 8;
+  reqKey[5]=unlockKey & 0xFF;
+  sendDiag(diagHandle,reqKey);
+}
+void sendDiag27_key(long diagHandle,byte lv,byte unlockKey[]){
+  byte reqKey[6] = {0x27};
+  reqKey[1]=lv+1;
+  memcpy_off(reqKey,2,unlockKey,0,4);
+  sendDiag(diagHandle,reqKey);
+}
+void sendDiag27_UnlockSecurityLevel(long diagHandle,byte lv,char ecuName[]){
+  
+  byte reqSeed[2] = {0x27};
+  byte reqKey[6] = {0x27};
+  byte seedArray[4],keyArray[4]; 
+  dword keyLen;
+  byte respBuffer[20];
+  
+  diagSetTarget(ecuName);
+  reqSeed[1]=lv;
+  reqKey[1]=lv+1;
+  
+  sendDiag(diagHandle,reqSeed);
+  AssertDiagTrue();
+  getDiagResp(respBuffer);
+  memcpy_off(seedArray,0,respBuffer,2,4);
+//  print(seedArray,4);
+  
+  diagGenerateKeyFromSeed(seedArray, elCount(seedArray) ,lv, ecuName, "", keyArray,  elCount(keyArray) , keyLen);
+
+  memcpy_off(reqKey,2,keyArray,0,4);
+  sendDiag(diagHandle,reqKey);
+  AssertDiagTrue();
+}
+
+void sendDiag37(long diagHandle){
+  byte q37[1]={0x37};
+  sendDiag(diagHandle,q37);
+}
+
+void sendDiag3E00(long diagHandle){
+  byte q3E[2]={0x3E,0x00};
+  sendDiag(diagHandle,q3E);
+}
+void sendDiag31010202(long diagHandle,byte crcArray[],long crcArrayLen){
+  byte q31010202[300] ={0x31,0x01,0x02,0x02};
+  long len;
+  memcpy_off(q31010202,4,crcArray,0,crcArrayLen);
+  
+  sendDiag(diagHandle,q31010202,4+crcArrayLen);
+}
+void sendDiag3101FF02(long diagHandle){
+  byte q3101FF02[4]={0x31,0x01,0xFF,0x2};
+  sendDiag(diagHandle,q3101FF02);
+}
+void sendDiag3101FF01(long diagHandle){
+  byte q3101FF01[4]={0x31,0x01,0xFF,0x1};
+  sendDiag(diagHandle,q3101FF01);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ============================== 断言=============================
+void printDiagReqAndRsep(){
+  char outputBuffer[100];
+  byteArrayToCharString(Diag.reqData,Diag.reqLength,outputBuffer);
+  testStep("请求",outputBuffer);
+  write("请求：%s",outputBuffer);
+  
+  byteArrayToCharString(Diag.respData,Diag.respLength,outputBuffer);
+  testStep("应答",outputBuffer);
+  write("应答：%s",outputBuffer);
+}
+void AssertDiagTrue(){
+  if(Diag.reqData[0] + 0x40 != Diag.respData[0]){
+    write("预期肯定应答，实际非肯定应答\n");
+    TestStepFail("", "预期肯定应答，实际非肯定应答");
+  }else{
+    testStepPass("","预期肯定应答，实际肯定应答");
+  }
+  printDiagReqAndRsep();
+}
+void AssertDiagFalse(){
+ if(Diag.respData[0] != 0x7F){
+   write("预期否定应答，收到非否定应答\n");
+   TestStepFail("","预期否定应答，收到非否定应答");
+ }else{
+   testStepPass("","预期否定应答，实际否定应答");
+ }
+  printDiagReqAndRsep();
+}
+void AssertDiagNoResponse(int len){
+  if(len != 1){ // 0 无应答 ， 1有应答， 2流控帧，3 NRC 0x78
+    testStepPass("","预期无应答，实际无应答");
+  }else{
+    testStepFail("","预期无应答，实际有应答");
+  }
+  printDiagReqAndRsep();
+}
+void AssertDiagFalseWithNRC(byte nrc){
+ if(Diag.respData[0] != 0x7F){
+   write("预期否定应答，收到非否定应答\n");
+   TestStepFail("","预期否定应答，收到非否定应答");
+ }else{
+   if(Diag.respData[Diag.respLength - 1] != nrc){
+     TestStepFail("","否定应答码不符合要求");
+   }else{
+     testStepPass("","预期否定应答，且NRC正确");
+   }
+ }
+  printDiagReqAndRsep();
+}
+void AssertDiagCompareBytes(byte byteArray[], int startIdx, byte inputArray[], int length) {
+  char outputBuffer[100];
+  int i;
+    for (i = 0; i < length; i++) {
+        if (byteArray[startIdx + i] != inputArray[i]) {
+          TestStepFail("","数据与预期不符");
+        }
+    }
+   testStepPass("","数据与预期一致");
+  byteArrayToCharString(inputArray,length,outputBuffer);
+  testStep("预期数据",outputBuffer);
+  printDiagReqAndRsep();
+}
+void AssertDiagCompareBytes(int startIdx, byte input) {
+  char outputBuffer[100];
+  int i;
+  if (Diag.respData[startIdx] != input) {
+      TestStepFail("","数据与预期不符",input);
+  }
+  testStepPass("","数据与预期一致");
+  printDiagReqAndRsep();
+}
+void AssertDiagCompareBytes(byte byteArray[], int startIdx, byte input) {
+  char outputBuffer[100];
+  int i;
+  if (byteArray[startIdx] != input) {
+      TestStepFail("","数据与预期不符",input);
+  }
+  testStepPass("","数据与预期一致");
+  printDiagReqAndRsep();
+}
